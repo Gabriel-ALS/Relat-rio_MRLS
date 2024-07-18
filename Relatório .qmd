@@ -1,0 +1,12 @@
+---
+title: "Relatório Estatística 3"
+author: "Gabriel Augusto L. Silva"
+format: pdf
+editor: visual
+---
+
+#### Introdução
+
+O objetivo deste relatório é analisar a correlação entre a quantidade de Duplo-Duplos de jogadores da NBB (National Basketball Brazil) e sua eficiência em quadra, por meio de analises descritivas, gráficos e regressão do tipo MRLS (modelo de regressão linear simples) utilizando as variaveis **DD_TOTAL** (Duplo-Duplos totais do jogador) e **EF_TOTAL** (Eficiência total do jogador).
+
+**Contexto:** Duplo-Duplo é o nome dado para quando um jogador atinge dois digitos em quaisquer duas estatisticas positivas no jogo, dentre elas temos pontos, rebotes, assistencias, roubos de bola e tocos (bloquear o arremesso do adversário). Existem também estatisticas negativas no jogo, como perder a bola, errar arremessos, faltas, andar (sem quicar a bola) e errar passes. Todas estas estatisticas positivas e negativas são levadas em consideração para dizer o quão bem um jogador desempenhou no jogo/temporada.
