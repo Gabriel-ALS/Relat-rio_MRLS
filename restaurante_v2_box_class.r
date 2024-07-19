@@ -1,5 +1,6 @@
 
-restaurante <- scan("/media/r2/8800BCCA00BCC08C1/Pasta de Trabalho/Regressão linear simples/Relatório/restaurante.dat", list(faturamento=0, gasto=0))
+restaurante <- scan("restaurante.dat",
+                    list(faturamento=0, gasto=0))
 # restaurante <- scan("F:/Pasta de Trabalho/Regressão linear simples/Relatório/restaurante.dat")
 
 attach(restaurante)
