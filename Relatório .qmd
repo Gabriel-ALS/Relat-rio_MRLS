@@ -7,6 +7,282 @@ editor: visual
 
 #### Introdução
 
-O objetivo deste relatório é analisar a correlação entre a quantidade de Duplo-Duplos de jogadores da NBB (National Basketball Brazil) e sua eficiência em quadra, por meio de analises descritivas, gráficos e regressão do tipo MRLS (modelo de regressão linear simples) utilizando as variaveis **DD_TOTAL** (Duplo-Duplos totais do jogador) e **EF_TOTAL** (Eficiência total do jogador).
+O objetivo deste relatório é analisar a correlação entre a quantidade de pontos dos dois melhores jogadores da NBB (National Basketball Brazil) de cada time ao longo das temporadas e sua respectiva eficiência em quadra, utilizando de **Regressão Linear Simples (MRLS)**, fixada a covariavel **PTS_TOTAL** (Pontos totais do jogador) e varivavel resposta **EF_TOTAL** (Eficiência total do jogador), estas informações se encontram no arquivo **Base_NBB.csv** disponivel no **Kaggle** para dominio publico por **Gabriel Pastorello** .
 
-**Contexto:** Duplo-Duplo é o nome dado para quando um jogador atinge dois digitos em quaisquer duas estatisticas positivas no jogo, dentre elas temos pontos, rebotes, assistencias, roubos de bola e tocos (bloquear o arremesso do adversário). Existem também estatisticas negativas no jogo, como perder a bola, errar arremessos, faltas, andar (sem quicar a bola) e errar passes. Todas estas estatisticas positivas e negativas são levadas em consideração para dizer o quão bem um jogador desempenhou no jogo/temporada.
+**Contexto:** A principal forma de interpretar o quão bom um jogador de basquete desempenha, é por meio de sua eficiência total, pois dentro dela engloba o quanto ele pontou, pegou rebotes, realizou assistências, defendeu quadra, realizou faltas, errou e todas as outras situações em quadra, a eficiencia leva em consideração toda a participação de um jogador em quadra, seja ela positiva ou não. Neste estudo buscaremos enxergar como a principal estatistica do esporte, a pontuação, é capaz de dizer sobre como um jogador desempenha.
+
+### Análise descritiva
+
+Apresentamos inicialmente as medidas de resumo das duas variaveis observadas, sendo a variavel resposta a eficiencia do jogador **(EF_TOTAL)** e a covariavel sendo a quantidade de cestas dos jogadores **(PTS_TOTAL)**. Segue abaixo as informações na Table 1.
+
+```{r dados, echo=FALSE, warning=FALSE, message=FALSE}
+
+library(readr)
+library(dplyr)
+library(MASS)
+library(knitr)
+
+dados <- read.csv("Base_NBB.csv")
+
+
+top2_jogadores <- dados %>%
+  group_by(Equipe) %>%
+  arrange(desc(EF_TOTAL)) %>%
+  slice(1:2)
+
+dados_filtrados <- top2_jogadores[,c("PTS_TOTAL","EF_TOTAL")]
+
+sumPTS <- c(summary(dados_filtrados$PTS_TOTAL),
+            var(dados_filtrados$PTS_TOTAL),
+            sd(dados_filtrados$PTS_TOTAL))
+
+sumEF <- c(summary(dados_filtrados$EF_TOTAL),
+            var(dados_filtrados$EF_TOTAL),
+           sd(dados_filtrados$EF_TOTAL))
+sumEF_PTS <- summary(dados_filtrados)
+
+
+```
+
++-----------+---------+------------+---------+---------+------------+---------+
+|           | Minimo  | 1° Quartil | Mediana | média   | 3° Quartil | Máximo  |
++===========+=========+:==========:+=========+=========+============+=========+
+| PTS_TOTAL | 32.0    | 341.0      | 406.0   | 423.4   | 507.0      | 735.0   |
++-----------+---------+------------+---------+---------+------------+---------+
+| EF_TOTAL  | 21.0    | 380.0      | 450.0   | 480.5   | 573.0      | 789.0   |
++-----------+---------+------------+---------+---------+------------+---------+
+
+: Medidas de resumo
+
+```{r boxplot, echo=FALSE, fig.align='center'}
+
+par(new = FALSE, mfrow=c(1,2))
+boxplot(dados_filtrados$EF_TOTAL, main = "Boxplot de Eficiência dos Jogadores", cex.main = 0.7)
+mtext("Figura 1", side = 1, line = 2, cex = 0.7)
+boxplot(dados_filtrados$PTS_TOTAL, main = "Boxplot de Pontos totais dos Jogadores", cex.main = 0.7)
+mtext("Figura 2", side = 1, line = 2, cex = 0.7)
+
+
+```
+
+Pela Table 1, observamos uma otima distribuição de valores inter-quartis, indicativo de que entre os times existe uma diferenças entre o desempenho dos jogadores, ao passo que, enquanto os 25% piores MVPs (os jogadores mais valiosos do time) de um time possuem até 380 scores de eficiência, outros times possuem 25% dos melhores MVPs com no minimo de 573 scores de eficiência, com uma média esperada de 480.5 scores de eficiência somado a grande variabilidade observados na Figura 1 \[32.0, 735.0\] e 2 \[21.0, 789.0\], podemos ver que existe uma diferença consideravel, até mesmo entre os melhores jogadores da liga. Também observamos a presença de 1 outlier nos boxplot de EF_TOTAL e PTS_TOTAL, ao olhar o banco de dados, notamos que ambas estatísticas pertencem ao mesmo jogador. Note que, o mesmo falado sobre a eficiência dos jogadores, também pode ser dito sobre a quantidade de pontos por jogador da liga.
+
+```{r densidade,echo=FALSE, fig.align='center'}
+
+plot(dados_filtrados$PTS_TOTAL,dados_filtrados$EF_TOTAL, type = "p",
+     xlab = "Total de pontos dos jogadores da NBB",
+     ylab = "Eficiência Total",
+     main = "Figura 3: Gráfico de dispersão das variáveis pontos e eficiência",cex.main = 0.7)
+
+
+```
+
+Na Figura 3 observamos que a distribuição inter-quartis semelhantes na Figura 1 e 2 não é uma coincidência, notamos que a principio existe uma correlação linear positiva entre quantidade de pontos e eficiência total dos jogadores profissionais, ou seja, quanto maior a quantidade de pontos, maior o score de eficiência. A correlação é estimada em 0.786 onde segundo Hinkle, Wiersma & jurs (2003) é considerado uma forte correlação entre as variaveis. Baseado nisto, ajustamos um modelo normal linear do tipo:
+
+$$
+eficiencia_i = \alpha + \beta pontos_i + \epsilon_i
+$$
+
+Em que $\epsilon_i \sim Normal(0,\sigma^2)$ e $i = 1,...,81$ representam os melhores jogadores dos times da liga.
+
+Rodando o ajuste obtemos os resultados demonstrados na Tabela 2.
+
+```{r ajuste, echo=FALSE, message=FALSE, warning=FALSE}
+
+fit.model <- lm(EF_TOTAL ~ PTS_TOTAL, data = dados_filtrados)
+
+```
+
+|        | Estimativas | Erro Padrão | t-valor | p-valor  |
+|--------|-------------|-------------|---------|----------|
+| $$     
+ \alpha  
+ $$      | 120.78910   | 33.12555    | 3.646   | 0.000475 |
+| $$     
+ \beta   
+ $$      | 0.84944     | 0.07504     | 11.319  | \< 2e-16 |
+
+: Ajuste do modelo normal linear
+
+Com os resultados da Tabela 2, podemos observar no modelo 1 que a variável **pontos** é significativa ao nível de 1%, confirmando o que observamos anteriormente quando comentamos sobre o grau de correlação entre variável **eficiência** e variável **pontos**, olhando $\alpha$ observamos que no intercepto, ou seja, no ponto em que a zero pontos, é esperado 120.78 score de eficiência, e olhando para $\beta$ , a cada cesta é esperado um aumento de 0.8494 de eficiência no score do jogador. A raiz do quadrado médio foi calculada em 84.23 em 79 graus de liberdade.
+
+```{r envelope, echo=FALSE,message=FALSE,warning=FALSE, fig.width = 10, fig.height=8}
+par(mfrow=c(1,1))
+X <- model.matrix(fit.model)
+n <- nrow(X)
+p <- ncol(X)
+H <- X%*%solve(t(X)%*%X)%*%t(X)
+h <- diag(H)
+si <- lm.influence(fit.model)$sigma
+r <- resid(fit.model)
+tsi <- r/(si*sqrt(1-h))
+#
+ident <- diag(n)
+epsilon <- matrix(0,n,100)
+e <- matrix(0,n,100)
+e1 <- numeric(n)
+e2 <- numeric(n)
+#
+for(i in 1:100){
+  epsilon[,i] <- rnorm(n,0,1)
+  e[,i] <- (ident - H)%*%epsilon[,i]
+  u <- diag(ident - H)
+  e[,i] <- e[,i]/sqrt(u)
+  e[,i] <- sort(e[,i]) }
+#
+for(i in 1:n){
+  eo <- sort(e[i,])
+  e1[i] <- (eo[2]+eo[3])/2
+  e2[i] <- (eo[97]+eo[98])/2 }
+#
+med <- apply(e,1,mean)
+faixa <- range(tsi,e1,e2)
+#
+par(pty="s")
+qqnorm(tsi,xlab="Percentis da N(0,1)",
+       ylab="Residuo Studentizado", ylim=faixa, pch=16)
+par(new=TRUE)
+qqnorm(e1,axes=F,xlab="",ylab="",type="l",ylim=faixa,lty=1)
+par(new=TRUE)
+qqnorm(e2,axes=F,xlab="",ylab="", type="l",ylim=faixa,lty=1)
+par(new=TRUE)
+qqnorm(med,axes=F,xlab="",ylab="",type="l",ylim=faixa,lty=2)
+
+
+```
+
+Pelo gráfico da Figura 4, podemos afirmar que é valido supor um modelo de regressão normal linear entre as variáveis **eficiência** e **pontos**, note que todos os pontos do gráfico se encontram dentro da região delimitada pelas linhas de corte. É possivel observar como ocorre o efeito de afunilamento no meio e logo depois a abertura nos extremos, isto se dá por conta do aumento de variabilidade nas pontas, já que os extremos possuem menos valores para se comparar em relação aos valores do centro. O coeficiente de determinação calculado ao se supor normalidade se deu por R² = 0.6185866, informando que em torno de 61% da variável **eficiência** pode ser informada por meio da variavel **pontos**, sendo os 39% restantes determinadas por outras estatistícas como rebote, assistência, roubo de bola, etc que não foram levadas em consideração.
+
+Segue na Figura 5 e Table 3, informações sobre o **intervalo de confiança** da reta estimada.
+
+| IC         | 2.5%       | 97.5%       |
+|------------|------------|-------------|
+| Intercepto | 54.8543558 | 186.7238531 |
+| Pontos     | 0.7000681  | 0.9988113   |
+
+: Intervalo de confiança
+
+```{r confiança, echo=FALSE,warning=FALSE,message=FALSE}
+# Intervalos de confiança para mu
+conf.int =  predict(fit.model,interval="confidence")
+
+#Intervalos de predição
+pred.int =  predict(fit.model,interval="prediction")
+
+fitted.values = pred.int[,1]
+
+pred.lower = pred.int[,"lwr"]
+pred.upper = pred.int[,"upr"]
+conf.lower = conf.int[,"lwr"]
+conf.upper = conf.int[,"upr"]   
+
+
+plot(dados_filtrados$PTS_TOTAL,dados_filtrados$EF_TOTAL)
+lines(dados_filtrados$PTS_TOTAL,fitted.values, col="#483D8B",lwd=2)
+lines(dados_filtrados$PTS_TOTAL,conf.lower, lwd=2,col="#A0522D")
+lines(dados_filtrados$PTS_TOTAL,conf.upper, lwd=2,col="#A0522D")
+lines(dados_filtrados$PTS_TOTAL,pred.lower, lwd=3,col="#66CDAA")
+lines(dados_filtrados$PTS_TOTAL,pred.upper, lwd=3,col="#66CDAA")
+
+```
+
+Comentando sobre a Table 3, podemos ver através do intercepto, os pontos critícos do intervalo de confiança, ou seja, com eles podemos dizer com 95% de confiança que os verdadeiros valores da variável **eficiência** estão no intervalo \[54.8543558;186.7238531\] e que o $\beta$ real vai estar no intervalo \[0.7000681;0.9988113\].
+
+A Figura 5 é uma representação gráfica da reta estimada (em roxo), das retas do intervalo de confiança (em laranja) e das retas de predição (em verde). Perceba que a reta de predição possui um "range" de valores muito maior do que a reta de intervalo de confiança, isto é obvio, pois a função das retas de predição é supor possiveis novas variaveis que poderiam aparecer, traduzindo para nosso estudo, ela nos permite prever a região que estaria um novo MVP de um time da liga baseado na quantidade de pontos que ele teve. Segue exemplo na Table 4
+
++------------------------+-----------------------+-----------------------+-----------------------+
+| Quantidade de pontos   | 900                   | 200                   | 450                   |
++========================+=======================+=======================+=======================+
+| Reta estimada          | 885.2848              | 290.677               | 503.037               |
++------------------------+-----------------------+-----------------------+-----------------------+
+| Intervalo de predição  | \[702.1989:1068.371\] | \[118.7268;462.6273\] | \[334.31;671.7639\]   |
++------------------------+-----------------------+-----------------------+-----------------------+
+| Intervalo de confiança | \[811.7023;958.8674\] | \[252.4561;328.898\]  | \[483.9913;522.0826\] |
++------------------------+-----------------------+-----------------------+-----------------------+
+
+: Exemplo
+
+No Diagnostico da normal, representada pelos gráficos abaixos nos permitem fazer algumas observações.
+
+```{r diag,echo=FALSE,message=FALSE,warning=FALSE, fig.width = 10, fig.height=8}
+X <- model.matrix(fit.model)
+n <- nrow(X)
+p <- ncol(X)
+H <- X%*%solve(t(X)%*%X)%*%t(X)
+h <- diag(H)
+lms <- summary(fit.model)
+s <- lms$sigma
+r <- resid(lms)
+ts <- r/(s*sqrt(1-h))
+di <- (1/p)*(h/(1-h))*(ts^2)
+si <- lm.influence(fit.model)$sigma
+tsi <- r/(si*sqrt(1-h))
+a <- max(tsi)
+b <- min(tsi)
+par(mfrow=c(2,2))
+plot(h,xlab="Indice", ylab="Medida h", pch=16, ylim=c(0,1))
+cut <- 2*p/n
+abline(cut,0,lty=2)
+#identify(h, n=1)
+#title(sub="(a)")
+#
+plot(di,xlab="Indice", ylab="Distancia de Cook", pch=16)
+#identify(di, n=2)
+#title(sub="(b)")
+#
+plot(tsi,xlab="Indice", ylab="Res?duo Padronizado",
+     ylim=c(b-1,a+1), pch=16)
+abline(2,0,lty=2)
+abline(-2,0,lty=2)
+#identify(tsi, n=2)
+#title(sub="(c)")
+#
+plot(fitted(fit.model),tsi,xlab="Valores Ajustados", 
+     ylab="Residuo Padronizado", ylim=c(b-1,a+1), pch=16)
+abline(2,0,lty=2)
+abline(-2,0,lty=2)
+
+```
+
+Note que no Gráfico de pontos de alavanca, ele nos indica no total 4 valores que se encontram como possiveis pontos de alavanca os pontos 1, 25, 34 e 42, ou seja, jogadores que não seguiram o mesmo padrão dos outros, obtendo uma eficiência muito fora do esperado, observando a Table 5, percebemos que alguns destes pontos possuem uma leve influencia nas estimativas, como no ponto 1 que altera o alfa em 20 pontos.
+
++-------------+----------+------------+--------------+---------+----------+
+|             |          | Estimativa | Erro Padrão  | t-valor | p-valor  |
++=============+==========+============+==============+=========+==========+
+| Completo    | $\alpha$ | 120.78910  | 33.12555     | 3.646   | 0.000475 |
++-------------+----------+------------+--------------+---------+----------+
+|             | $\beta$  | 0.84944    | 0.07504      | 11.319  | \<2e-16  |
++-------------+----------+------------+--------------+---------+----------+
+| Sem 1       | $\alpha$ | 141.8901   | 35.2221      | 4.028   | 0.000129 |
++-------------+----------+------------+--------------+---------+----------+
+|             | $\beta$  | 0.8039     | 0.0793       | 10.137  | 6.89e-16 |
++-------------+----------+------------+--------------+---------+----------+
+| Sem 25      | $\alpha$ | 122.42279  | 34.10633     | 3.589   | 0.000577 |
++-------------+----------+------------+--------------+---------+----------+
+|             | $\beta$  | 0.84500    | 0.07803      | 10.830  | \< 2e-16 |
++-------------+----------+------------+--------------+---------+----------+
+| Sem 34      | $\alpha$ | 115.04186  | 33.92544     | 3.391   | 0.0011   |
++-------------+----------+------------+--------------+---------+----------+
+|             | $\beta$  | 0.86511    | 0.07759      | 11.150  | \<2e-16  |
++-------------+----------+------------+--------------+---------+----------+
+| Sem 42      | $\alpha$ | 112.53753  | 33.46276     | 3.363   | 0.0012   |
++-------------+----------+------------+--------------+---------+----------+
+|             | $\beta$  | 0.86547    | 0.07549      | 11.464  | \<2e-16  |
++-------------+----------+------------+--------------+---------+----------+
+
+: Outliers observados
+
+Ao observar o Gráfico de pontos influentes, notamos de cara um valor extremamente distante em comparação ao resto (o ponto 1), entretanto ao calcular o distanciamento de cook, chegamos no valor de 0.3496, como nenhum dos pontos se encontrava na zona de rejeição, concluimos que não existiam pontos influentes, com o maior valor encontrado sendo 0.20.
+
+Notamos um possivel indicio de heterocedasticidade no modelo no Gráfico de Homocedasticidade, a partir disso, utilizaremos o método de boxcox, para identificar se este modelo é valido ou não.
+
+```{r boxcox, echo=FALSE, warning=FALSE, message=FALSE}
+boxcox(fit.model)
+title(main = "Figura 7: Gráfico de Boxcox"  )
+```
+
+Após observarmos que o intervalo de confiança possui valores no intervalo \[0,1\] podemos concluir que não é necessário uma transformação para esse modelo, logo, é correto afirmar que o modelo 1 é valido para observar a relação linear entre a variável **eficiência** e a variável **pontos**.
+
+#### Conclusão
+
+O estudo sobre a relação de eficiência dos melhores jogadores por time da NBB e suas respectivas quantidade de pontos buscou tentar ver o quanto a quantidade de pontos dizia sobre a qualidade de um jogador, tendo em vista que existem diferentes estatísticas no basquete que podem ser levadas em consideração quando se fala sobre um jogador profissional. Observamos que a eficiência e a quantidade de pontos possuem uma correlação de 0.78 o que mostra a forte relaçao entre elas. O R² de 0,61 nos diz que 61% da variável pode ser explicada por meio da covariavel **pontos**, enquanto o resto pode ser explicada por outras estatistícas, como rebote, defesa e etc. Com o envelope foi confirmado a normalidade das variáveis o que nos permitiu fazer as afirmações sobre a regressão ser linear e valida, juntamente a isto, realizamos o teste de boxcox para que pudessemos ver se o modelo era valido para o teste, o que foi confirmado como valido durante a análise. O gráfico de diagnosticos nos forneceu alguns outliers que nos entregam indicios de heterocedasticidade, e alguns pontos de alavanca ( pontos 1, 25, 34 e 42 ), que após a retirada deles, apresentaram algumas leves mudanças, mas não foram fortes o suficientes, para alterar os testes de boxcox e envelope. Portanto, podemos super que existe uma relação relevante entre a eficiência total dos melhores jogadores da liga NBB e sua quantidade total de pontos ao longo dos jogos.
